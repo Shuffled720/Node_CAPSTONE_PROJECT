@@ -1,0 +1,65 @@
+
+app.post("/api/validate-sim", async (req, res, next) => {
+  try {
+    if (!sim_number || !service_number) {
+      return res
+        .status(400)
+        .json(
+          invalidDetailsError(
+            "Invalid details, please check again Subscriber Identity Module (SIM)number/Service number!"
+          )
+        );
+    }
+    // 1. Validate formats
+    if (!/^\d{13}$/.test(sim_number) || !/^\d{10}$/.test(service_number)) {
+      return res
+        .status(400)
+        .json(
+          invalidDetailsError(
+            "Invalid details, please check again Subscriber Identity Module (SIM)number/Service number!"
+          )
+        );
+    }
+
+    // 2. Find SIM
+    const sim = await SimDetails.findOne({ sim_number, service_number });
+    if (!sim) {
+      return res
+        .status(404)
+        .json(
+          invalidDetailsError(
+            "Invalid details, please check again Subscriber Identity Module (SIM)number/Service number!"
+          )
+        );
+    }
+
+    // 3. Check status
+    if (sim.sim_status === "active") {
+      return res
+        .status(200)
+        .json({ message: "Subscriber Identity Module (SIM) already active" });
+    }
+
+    // 4. Fetch offers
+    const offers = await SimOffer.find({ sim_id: sim.sim_id });
+    if (!offers || offers.length === 0) {
+      return res
+        .status(200)
+        .json({ message: "No offers available for this SIM" });
+    }
+
+    // 5. Format offers
+    const formattedOffers = offers.map(
+      (o) =>
+        `${o.call_qty} calls + ${o.data_qty} GB for Rs.${o.cost}, Validity: ${o.duration} days.`
+    );
+
+    res.status(200).json({
+      sim_number,
+      service_number,
+      offers: formattedOffers,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
